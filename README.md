@@ -65,7 +65,7 @@ No commit has been made by the assistant. If this folder is not a Git repository
 
 ```powershell
 git init
-git add app.py requirements.txt .gitignore .streamlit/config.toml README.md AGENTS.md docs
+git add app.py requirements.txt .gitignore .streamlit/config.toml README.md
 git diff --cached --stat
 git commit -m "chore: initialize Python and Streamlit project"
 ```
@@ -86,11 +86,3 @@ The target is a functional first version in approximately 2–4 working days. Pa
 ## Language
 
 All project filenames, documentation, source code identifiers, comments, tests, user interface text, and error messages will use English. Explanations in the conversation will remain in Turkish.
-
-## Documents
-
-- [Development instructions](AGENTS.md)
-- [Project plan](docs/PROJECT_PLAN.md)
-- [Architecture and data rules](docs/ARCHITECTURE.md)
-
-These documents guide development; the application does not require them at runtime.
