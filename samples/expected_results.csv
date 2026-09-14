@@ -1,0 +1,9 @@
+payment_reference,status,expected_amount,actual_amount,difference,expected_count,actual_count,description
+PAY-001,matched,1000.00,1000.00,0.00,1,1,Reference and amount match.
+PAY-002,amount_mismatch,2500.00,2300.00,-200.00,1,1,Actual payment is 200.00 TRY below the expected amount.
+PAY-003,missing,750.00,,,1,0,No actual payment was found for this reference.
+PAY-004,review_required,,,,1,2,Duplicate reference in actual payments; manual review required.
+PAY-005,amount_mismatch,100.00,125.00,25.00,1,1,Actual payment is 25.00 TRY above the expected amount.
+PAY-006,matched,1250.75,1250.75,0.00,1,1,Reference and amount match including fractional currency units.
+PAY-007,review_required,,,,2,1,Duplicate reference in expected payments; manual review required.
+PAY-099,unexpected,,400.00,,0,1,No expected payment was found for this reference.
