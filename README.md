@@ -1,6 +1,6 @@
 # Payment Reconciliation Tool
 
-A small Python and Streamlit application that compares expected payments with actual payments from two CSV files.
+A lightweight tool for reconciling expected and actual payments from CSV files. Built with Python and Streamlit.
 
 ## Status
 
