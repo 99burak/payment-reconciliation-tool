@@ -1,8 +1,33 @@
-"""Pair validated payments, classify amounts, and calculate signed differences."""
+"""Group validated payments, compare unique pairs, and identify duplicate references."""
 
-from collections import Counter
+from reconciliation.models import ActualPayment, ExpectedPayment, PaymentGroup, PaymentPair
 
-from reconciliation.models import ActualPayment, ExpectedPayment, PaymentPair
+
+def group_payments_by_reference(
+    expected_payments: list[ExpectedPayment],
+    actual_payments: list[ActualPayment],
+) -> list[PaymentGroup]:
+    """Preserve every record in one group per exact reference, without summing.
+
+    Order follows first appearance in expected payments, then references only
+    present in actual payments. Source records retain their order within a group.
+    """
+    expected_by_reference: dict[str, list[ExpectedPayment]] = {}
+    actual_by_reference: dict[str, list[ActualPayment]] = {}
+    for payment in expected_payments:
+        expected_by_reference.setdefault(payment.payment_reference, []).append(payment)
+    for payment in actual_payments:
+        actual_by_reference.setdefault(payment.payment_reference, []).append(payment)
+
+    references = dict.fromkeys([*expected_by_reference, *actual_by_reference])
+    return [
+        PaymentGroup(
+            payment_reference=reference,
+            expected_records=tuple(expected_by_reference.get(reference, [])),
+            actual_records=tuple(actual_by_reference.get(reference, [])),
+        )
+        for reference in references
+    ]
 
 
 def match_unique_payments(
@@ -16,17 +41,11 @@ def match_unique_payments(
     inputs remain unchanged for their classification in a later stage.
     Amounts do not affect whether two records are paired.
     """
-    expected_counts = Counter(payment.payment_reference for payment in expected_payments)
-    actual_by_reference: dict[str, list[ActualPayment]] = {}
-    for payment in actual_payments:
-        actual_by_reference.setdefault(payment.payment_reference, []).append(payment)
-
-    pairs = []
-    for expected in expected_payments:
-        actual_records = actual_by_reference.get(expected.payment_reference, [])
-        if expected_counts[expected.payment_reference] == 1 and len(actual_records) == 1:
-            pairs.append(PaymentPair(expected=expected, actual=actual_records[0]))
-    return pairs
+    return [
+        PaymentPair(expected=group.expected_records[0], actual=group.actual_records[0])
+        for group in group_payments_by_reference(expected_payments, actual_payments)
+        if not group.requires_review and group.expected_records and group.actual_records
+    ]
 
 
 def amounts_match(pair: PaymentPair) -> bool:

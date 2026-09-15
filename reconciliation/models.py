@@ -25,3 +25,17 @@ class PaymentPair:
 
     expected: ExpectedPayment
     actual: ActualPayment
+
+
+@dataclass(frozen=True)
+class PaymentGroup:
+    """All source records for one reference, preserved on their original side."""
+
+    payment_reference: str
+    expected_records: tuple[ExpectedPayment, ...]
+    actual_records: tuple[ActualPayment, ...]
+
+    @property
+    def requires_review(self) -> bool:
+        """A repeated reference on either side makes automatic pairing ambiguous."""
+        return len(self.expected_records) > 1 or len(self.actual_records) > 1
