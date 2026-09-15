@@ -4,7 +4,7 @@ A lightweight tool for reconciling expected and actual payments from CSV files. 
 
 ## Status
 
-Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Stage 5 steps 1–4 now support reference pairing, exact amount equality checks, pair status assignment, and signed differences. Final stage review is next. The Streamlit screen is still the starter screen; upload controls, complete reconciliation, filtering, and export are planned for later stages.
+Stages 1–5 (planning, the project skeleton, sample payment data, CSV validation, and unique-pair comparison) are complete. Unique reference pairs support exact amount equality checks, status assignment, and signed differences. The Streamlit screen is still the starter screen; missing/unexpected/duplicate-reference classification, upload controls, filtering, and export are planned for later stages.
 
 ## Setup
 
@@ -196,6 +196,14 @@ The sample pairs produce these differences:
 This function operates only on unique pairs. Missing, unexpected, and duplicate-reference groups still await their classification stage; they are not assigned zero differences.
 
 Step 4 verification: all 39 tests passed. The two new tests check differences against expected_results.csv and verify negative, zero, and positive one-cent differences, including amounts beyond floating-point integer precision.
+
+## Stage 5 final verification (step 5)
+
+All 39 existing tests passed during final review. An additional combined check loaded both sample CSV files and compared each unique pair's reference, expected amount, actual amount, equality result, status, and signed difference with expected_results.csv. All four unique pairs agreed with the reference data.
+
+This completes the unique-pair comparison stage. The remaining four reference groups in the sample data are intentionally outside its scope: missing, unexpected, and duplicate-reference classification will be implemented in the next stage. The current pairing output is not a complete report of every input payment.
+
+Only verification notes were changed during this final review; application code was unchanged.
 
 ## Tests
 
