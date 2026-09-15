@@ -4,7 +4,7 @@ A lightweight tool for reconciling expected and actual payments from CSV files. 
 
 ## Status
 
-Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Validated payment records can be loaded in Python. The Streamlit screen is still the starter screen; upload controls, reconciliation, filtering, and export are planned for later stages.
+Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Stage 5 is in progress: reference pairing is implemented, while amount comparison is pending. The Streamlit screen is still the starter screen; upload controls, complete reconciliation, filtering, and export are planned for later stages.
 
 ## Setup
 
@@ -47,8 +47,10 @@ Open http://127.0.0.1:8501 in your browser. Stop the server with Ctrl+C in the t
 | reconciliation/validation.py | Reads CSV bytes, checks inputs, and converts amounts into integer cents. |
 | reconciliation/__init__.py | Identifies the reconciliation directory as a Python package. |
 | tests/test_validation.py | Exercises valid files, invalid data, exact amounts, and input limits. |
+| reconciliation/engine.py | Pairs records whose reference appears exactly once in each input. |
+| tests/test_engine.py | Checks reference pairing, ambiguous references, and preservation of inputs. |
 
-The reconciliation engine and reporting module will be created in their own stages.
+Amount comparison, complete reconciliation, and reporting will be added in their own steps.
 
 ## Sample payment data
 
@@ -121,6 +123,25 @@ payments.csv, row 3: Required field 'amount' is empty.
 ```
 
 models.py uses dataclasses: simple Python record definitions with named fields. ExpectedPayment contains a reference, customer name, amount_cents, and source_row. ActualPayment contains a transaction ID, reference, amount_cents, and source_row. These are in-memory records, not database tables.
+
+## Reference pairing (Stage 5, step 1)
+
+match_unique_payments in reconciliation/engine.py accepts the two validated payment lists and returns PaymentPair records. Each pair keeps the original expected and actual records together, including their amounts and source lines. Pairs follow the expected input order; the actual file can be ordered differently.
+
+```python
+from reconciliation.engine import match_unique_payments
+
+# expected and actual are the lists loaded in the example above.
+pairs = match_unique_payments(expected, actual)
+for pair in pairs:
+    print(pair.expected.payment_reference, pair.actual.transaction_id)
+```
+
+The sample files produce four pairs: PAY-001, PAY-002, PAY-005, and PAY-006. Pairing only connects references; it does not assign matched/amount_mismatch statuses or calculate differences yet.
+
+A reference must occur exactly once on each side to form a pair. Duplicate or one-sided references are excluded from this partial result, with all input records left unchanged. Their classification is a later stage. The returned pairs are not a complete reconciliation report.
+
+Step 1 verification: all 8 reference-pairing tests passed, together with the existing 24 validation tests (32 total). No user interface changes were made in this step.
 
 ## Tests
 

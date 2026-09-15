@@ -17,3 +17,11 @@ class ActualPayment:
     payment_reference: str
     amount_cents: int
     source_row: int
+
+
+@dataclass(frozen=True)
+class PaymentPair:
+    """Two records sharing a unique reference; amounts are not compared yet."""
+
+    expected: ExpectedPayment
+    actual: ActualPayment
