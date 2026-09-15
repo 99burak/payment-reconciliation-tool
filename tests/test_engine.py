@@ -1,10 +1,16 @@
-"""Reference pairing, exact amount comparison, and pair status checks."""
+"""Reference pairing, amount comparison, status, and signed difference checks."""
 
 import csv
+from decimal import Decimal
 from pathlib import Path
 import unittest
 
-from reconciliation.engine import amounts_match, get_payment_status, match_unique_payments
+from reconciliation.engine import (
+    amounts_match,
+    calculate_difference_cents,
+    get_payment_status,
+    match_unique_payments,
+)
 from reconciliation.models import ActualPayment, ExpectedPayment, PaymentPair
 from reconciliation.validation import load_actual_payments, load_expected_payments
 
@@ -125,6 +131,35 @@ class PaymentStatusTests(unittest.TestCase):
             with self.subTest(actual_cents=actual_cents):
                 pair = PaymentPair(expected("P", 125075), actual("P", actual_cents))
                 self.assertEqual(get_payment_status(pair), status)
+
+
+class PaymentDifferenceTests(unittest.TestCase):
+    def test_sample_differences_agree_with_the_reference_results_file(self):
+        samples = Path(__file__).resolve().parents[1] / "samples"
+        expected_records = load_expected_payments((samples / "expected_payments.csv").read_bytes())
+        actual_records = load_actual_payments((samples / "actual_payments.csv").read_bytes())
+        with (samples / "expected_results.csv").open(encoding="utf-8-sig", newline="") as handle:
+            expected_differences = {
+                row["payment_reference"]: int(Decimal(row["difference"]) * 100)
+                for row in csv.DictReader(handle)
+                if row["difference"] != ""
+            }
+        pairs = match_unique_payments(expected_records, actual_records)
+        self.assertEqual(
+            {pair.expected.payment_reference: calculate_difference_cents(pair) for pair in pairs},
+            expected_differences,
+        )
+
+    def test_one_cent_differences_keep_their_sign_and_precision(self):
+        for expected_cents in (125075, 9_007_199_254_740_992):
+            for offset in (-1, 0, 1):
+                with self.subTest(expected_cents=expected_cents, offset=offset):
+                    pair = PaymentPair(
+                        expected("P", expected_cents), actual("P", expected_cents + offset)
+                    )
+                    difference = calculate_difference_cents(pair)
+                    self.assertIs(type(difference), int)
+                    self.assertEqual(difference, offset)
 
 
 if __name__ == "__main__":

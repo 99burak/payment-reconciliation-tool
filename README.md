@@ -4,7 +4,7 @@ A lightweight tool for reconciling expected and actual payments from CSV files. 
 
 ## Status
 
-Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Stage 5 is in progress: reference pairing, exact amount equality checks, and pair status assignment are implemented. Difference calculation is pending. The Streamlit screen is still the starter screen; upload controls, complete reconciliation, filtering, and export are planned for later stages.
+Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Stage 5 steps 1–4 now support reference pairing, exact amount equality checks, pair status assignment, and signed differences. Final stage review is next. The Streamlit screen is still the starter screen; upload controls, complete reconciliation, filtering, and export are planned for later stages.
 
 ## Setup
 
@@ -47,10 +47,10 @@ Open http://127.0.0.1:8501 in your browser. Stop the server with Ctrl+C in the t
 | reconciliation/validation.py | Reads CSV bytes, checks inputs, and converts amounts into integer cents. |
 | reconciliation/__init__.py | Identifies the reconciliation directory as a Python package. |
 | tests/test_validation.py | Exercises valid files, invalid data, exact amounts, and input limits. |
-| reconciliation/engine.py | Pairs unique references, compares amounts, and returns pair statuses. |
-| tests/test_engine.py | Checks pairing, input preservation, exact amounts, and pair statuses. |
+| reconciliation/engine.py | Pairs unique references, compares amounts, assigns statuses, and calculates differences in cents. |
+| tests/test_engine.py | Checks pairing, input preservation, exact amounts, pair statuses, and signed differences. |
 
-Difference calculation, complete reconciliation, and reporting will be added in their own steps.
+Complete reconciliation and reporting will be added in their own steps.
 
 ## Sample payment data
 
@@ -172,6 +172,30 @@ for pair in pairs:
 The sample pairs produce matched for PAY-001 and PAY-006, and amount_mismatch for PAY-002 and PAY-005. This function does not calculate differences or classify missing, unexpected, or duplicate-reference groups.
 
 Step 3 verification: all 37 tests passed. Two new tests verify statuses against the existing expected_results.csv reference and check one-cent underpayments and overpayments. The interface remains unchanged.
+
+## Signed difference (Stage 5, step 4)
+
+calculate_difference_cents accepts a PaymentPair and returns actual.amount_cents minus expected.amount_cents as an integer. Negative values mean underpayment, positive values mean overpayment, and zero means equal amounts. No rounding or absolute-value conversion is applied.
+
+```python
+from reconciliation.engine import calculate_difference_cents
+
+for pair in pairs:
+    print(pair.expected.payment_reference, calculate_difference_cents(pair))
+```
+
+The sample pairs produce these differences:
+
+| Reference | Difference in cents | Meaning in TRY |
+|---|---:|---|
+| PAY-001 | 0 | Equal amounts |
+| PAY-002 | -20000 | 200.00 underpaid |
+| PAY-005 | 2500 | 25.00 overpaid |
+| PAY-006 | 0 | Equal amounts |
+
+This function operates only on unique pairs. Missing, unexpected, and duplicate-reference groups still await their classification stage; they are not assigned zero differences.
+
+Step 4 verification: all 39 tests passed. The two new tests check differences against expected_results.csv and verify negative, zero, and positive one-cent differences, including amounts beyond floating-point integer precision.
 
 ## Tests
 

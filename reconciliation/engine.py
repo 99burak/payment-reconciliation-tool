@@ -1,4 +1,4 @@
-"""Pair validated payments, compare amounts, and identify pair statuses."""
+"""Pair validated payments, classify amounts, and calculate signed differences."""
 
 from collections import Counter
 
@@ -37,3 +37,8 @@ def amounts_match(pair: PaymentPair) -> bool:
 def get_payment_status(pair: PaymentPair) -> str:
     """Classify a unique reference pair by exact amount equality."""
     return "matched" if amounts_match(pair) else "amount_mismatch"
+
+
+def calculate_difference_cents(pair: PaymentPair) -> int:
+    """Return actual minus expected in cents: negative means underpayment."""
+    return pair.actual.amount_cents - pair.expected.amount_cents
