@@ -4,7 +4,7 @@ A lightweight tool for reconciling expected and actual payments from CSV files. 
 
 ## Status
 
-Stages 1 (planning), 2 (the project skeleton), and 3 (sample payment data) are complete. The local Streamlit starter screen and sample CSV files are available. CSV parsing, upload, reconciliation, filtering, and export are planned for later stages.
+Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Validated payment records can be loaded in Python. The Streamlit screen is still the starter screen; upload controls, reconciliation, filtering, and export are planned for later stages.
 
 ## Setup
 
@@ -43,8 +43,12 @@ Open http://127.0.0.1:8501 in your browser. Stop the server with Ctrl+C in the t
 | samples/expected_payments.csv | Synthetic expected payments; also serves as the expected-payment CSV template. |
 | samples/actual_payments.csv | Synthetic actual payments; also serves as the actual-payment CSV template. |
 | samples/expected_results.csv | Manually specified expected outcomes for verifying the future reconciliation engine. |
+| reconciliation/models.py | Defines expected and actual payment records held in memory. |
+| reconciliation/validation.py | Reads CSV bytes, checks inputs, and converts amounts into integer cents. |
+| reconciliation/__init__.py | Identifies the reconciliation directory as a Python package. |
+| tests/test_validation.py | Exercises valid files, invalid data, exact amounts, and input limits. |
 
-The reconciliation modules will be created in their own stages.
+The reconciliation engine and reporting module will be created in their own stages.
 
 ## Sample payment data
 
@@ -75,6 +79,58 @@ Duplicate references require review even if adding their amounts would produce a
 The expected summary counts reference groups: 2 matched, 2 amount mismatches, 1 missing, 1 unexpected, and 2 requiring review.
 
 Sample-data verification passed: all three CSV schemas and row counts, required input fields, positive two-decimal amounts, unique transaction IDs, source reference counts, and all eight manually specified outcomes were checked. Amount differences were verified using exact decimal arithmetic. These checks validate the examples; they do not represent tests of an implemented reconciliation engine.
+
+## CSV loading and validation
+
+The loaders use Python's standard library and do not depend on Streamlit. Pass the file contents as bytes and, optionally, a filename for error messages:
+
+```python
+from pathlib import Path
+
+from reconciliation.validation import load_actual_payments, load_expected_payments
+
+expected_file = Path("samples/expected_payments.csv")
+actual_file = Path("samples/actual_payments.csv")
+
+expected = load_expected_payments(expected_file.read_bytes(), expected_file.name)
+actual = load_actual_payments(actual_file.read_bytes(), actual_file.name)
+
+print(len(expected), len(actual))  # 8 8
+print(expected[5].amount_cents)  # 125075 represents 1250.75 TRY
+```
+
+Each loader returns the complete list of validated records or raises CSVValidationError. It never returns a partially accepted file. source_row records the starting physical line of a payment, including when earlier quoted fields span multiple lines.
+
+Validation rules:
+
+- Accept UTF-8, including UTF-8 BOM, with comma-separated fields.
+- Trim surrounding whitespace; preserve reference case and leading zeros.
+- Accept required columns in any order and ignore additional named columns.
+- Reject missing, duplicate, or empty column names and missing required values.
+- Ignore fully blank rows; reject empty files and files with no payments.
+- Accept positive amounts such as 10, 10.5, and 10.50. Reject zero, negatives, comma decimal separators, thousands separators, currency symbols, and more than two decimal places.
+- Convert amounts directly to integer cents without floating-point arithmetic or rounding.
+- Reject repeated transaction IDs after trimming. Repeated payment references are preserved for the future reconciliation stage.
+- Reject malformed CSV, mismatched field counts, and invalid UTF-8.
+- Accept up to 5 MiB (5,242,880 bytes) and 10,000 nonblank payment rows per file.
+
+Errors identify the filename and source line when applicable. For example:
+
+```text
+payments.csv, row 3: Required field 'amount' is empty.
+```
+
+models.py uses dataclasses: simple Python record definitions with named fields. ExpectedPayment contains a reference, customer name, amount_cents, and source_row. ActualPayment contains a transaction ID, reference, amount_cents, and source_row. These are in-memory records, not database tables.
+
+## Tests
+
+Run the tests from the project folder with Python's built-in unittest runner; no additional test package is required:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Stage 4 verification: all 24 validation tests passed, including both sample input files, exact fractional amounts, input errors, preserved duplicate references, and size/row limit boundaries. Reconciliation results are not calculated in this stage.
 
 ## Stage 2 verification
 
