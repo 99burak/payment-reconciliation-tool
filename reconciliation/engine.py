@@ -1,4 +1,4 @@
-"""Pair validated payment records before comparing their amounts."""
+"""Pair validated payment records and check whether their amounts agree."""
 
 from collections import Counter
 
@@ -27,3 +27,8 @@ def match_unique_payments(
         if expected_counts[expected.payment_reference] == 1 and len(actual_records) == 1:
             pairs.append(PaymentPair(expected=expected, actual=actual_records[0]))
     return pairs
+
+
+def amounts_match(pair: PaymentPair) -> bool:
+    """Check exact cent equality for a pair produced by match_unique_payments."""
+    return pair.expected.amount_cents == pair.actual.amount_cents

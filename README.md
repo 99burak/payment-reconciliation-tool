@@ -4,7 +4,7 @@ A lightweight tool for reconciling expected and actual payments from CSV files. 
 
 ## Status
 
-Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Stage 5 is in progress: reference pairing is implemented, while amount comparison is pending. The Streamlit screen is still the starter screen; upload controls, complete reconciliation, filtering, and export are planned for later stages.
+Stages 1–4 (planning, the project skeleton, sample payment data, and CSV loading and validation) are complete. Stage 5 is in progress: reference pairing and exact amount equality checks are implemented. Status assignment and difference calculation are pending. The Streamlit screen is still the starter screen; upload controls, complete reconciliation, filtering, and export are planned for later stages.
 
 ## Setup
 
@@ -47,10 +47,10 @@ Open http://127.0.0.1:8501 in your browser. Stop the server with Ctrl+C in the t
 | reconciliation/validation.py | Reads CSV bytes, checks inputs, and converts amounts into integer cents. |
 | reconciliation/__init__.py | Identifies the reconciliation directory as a Python package. |
 | tests/test_validation.py | Exercises valid files, invalid data, exact amounts, and input limits. |
-| reconciliation/engine.py | Pairs records whose reference appears exactly once in each input. |
-| tests/test_engine.py | Checks reference pairing, ambiguous references, and preservation of inputs. |
+| reconciliation/engine.py | Pairs unique references and checks whether their amounts are equal. |
+| tests/test_engine.py | Checks reference pairing, preservation of inputs, and exact amount comparisons. |
 
-Amount comparison, complete reconciliation, and reporting will be added in their own steps.
+Status assignment, difference calculation, complete reconciliation, and reporting will be added in their own steps.
 
 ## Sample payment data
 
@@ -142,6 +142,21 @@ The sample files produce four pairs: PAY-001, PAY-002, PAY-005, and PAY-006. Pai
 A reference must occur exactly once on each side to form a pair. Duplicate or one-sided references are excluded from this partial result, with all input records left unchanged. Their classification is a later stage. The returned pairs are not a complete reconciliation report.
 
 Step 1 verification: all 8 reference-pairing tests passed, together with the existing 24 validation tests (32 total). No user interface changes were made in this step.
+
+## Amount equality (Stage 5, step 2)
+
+amounts_match accepts a PaymentPair from match_unique_payments and returns True when the amounts are equal, or False when they differ. It compares integer cents directly, so a one-cent difference is preserved without rounding.
+
+```python
+from reconciliation.engine import amounts_match
+
+for pair in pairs:
+    print(pair.expected.payment_reference, amounts_match(pair))
+```
+
+For the sample pairs, PAY-001 and PAY-006 return True; PAY-002 and PAY-005 return False. The function does not assign a status or calculate a difference. These are the next steps.
+
+Step 2 verification: all 35 tests passed (24 input validation, 8 reference pairing, and 3 amount comparison tests). The new checks cover sample pairs, one-cent differences in both directions, and large values that would lose precision if converted to floating point.
 
 ## Tests
 

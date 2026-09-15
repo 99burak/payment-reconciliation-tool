@@ -21,7 +21,7 @@ class ActualPayment:
 
 @dataclass(frozen=True)
 class PaymentPair:
-    """Two records sharing a unique reference; amounts are not compared yet."""
+    """Two records sharing a unique reference, kept together for comparison."""
 
     expected: ExpectedPayment
     actual: ActualPayment
