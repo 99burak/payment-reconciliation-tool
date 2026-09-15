@@ -39,3 +39,17 @@ class PaymentGroup:
     def requires_review(self) -> bool:
         """A repeated reference on either side makes automatic pairing ambiguous."""
         return len(self.expected_records) > 1 or len(self.actual_records) > 1
+
+
+@dataclass(frozen=True)
+class ReconciliationResult:
+    """One classified reference with optional amounts and all source records."""
+
+    payment_reference: str
+    status: str
+    expected_amount_cents: int | None
+    actual_amount_cents: int | None
+    difference_cents: int | None
+    description: str
+    expected_records: tuple[ExpectedPayment, ...]
+    actual_records: tuple[ActualPayment, ...]
