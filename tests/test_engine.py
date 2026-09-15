@@ -1,9 +1,10 @@
-"""Reference pairing and exact payment amount comparison checks."""
+"""Reference pairing, exact amount comparison, and pair status checks."""
 
+import csv
 from pathlib import Path
 import unittest
 
-from reconciliation.engine import amounts_match, match_unique_payments
+from reconciliation.engine import amounts_match, get_payment_status, match_unique_payments
 from reconciliation.models import ActualPayment, ExpectedPayment, PaymentPair
 from reconciliation.validation import load_actual_payments, load_expected_payments
 
@@ -98,6 +99,32 @@ class AmountComparisonTests(unittest.TestCase):
         different_pair = PaymentPair(expected("P", cents), actual("P", cents + 1))
         self.assertIs(amounts_match(equal_pair), True)
         self.assertIs(amounts_match(different_pair), False)
+
+
+class PaymentStatusTests(unittest.TestCase):
+    def test_sample_statuses_agree_with_the_reference_results_file(self):
+        samples = Path(__file__).resolve().parents[1] / "samples"
+        expected_records = load_expected_payments((samples / "expected_payments.csv").read_bytes())
+        actual_records = load_actual_payments((samples / "actual_payments.csv").read_bytes())
+        with (samples / "expected_results.csv").open(encoding="utf-8-sig", newline="") as handle:
+            expected_statuses = {
+                row["payment_reference"]: row["status"]
+                for row in csv.DictReader(handle)
+                if row["status"] in {"matched", "amount_mismatch"}
+            }
+        pairs = match_unique_payments(expected_records, actual_records)
+        self.assertEqual(
+            {pair.expected.payment_reference: get_payment_status(pair) for pair in pairs},
+            expected_statuses,
+        )
+
+    def test_one_cent_underpayment_and_overpayment_are_mismatches(self):
+        for actual_cents, status in [(125074, "amount_mismatch"),
+                                     (125075, "matched"),
+                                     (125076, "amount_mismatch")]:
+            with self.subTest(actual_cents=actual_cents):
+                pair = PaymentPair(expected("P", 125075), actual("P", actual_cents))
+                self.assertEqual(get_payment_status(pair), status)
 
 
 if __name__ == "__main__":

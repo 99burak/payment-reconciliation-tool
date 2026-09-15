@@ -1,4 +1,4 @@
-"""Pair validated payment records and check whether their amounts agree."""
+"""Pair validated payments, compare amounts, and identify pair statuses."""
 
 from collections import Counter
 
@@ -32,3 +32,8 @@ def match_unique_payments(
 def amounts_match(pair: PaymentPair) -> bool:
     """Check exact cent equality for a pair produced by match_unique_payments."""
     return pair.expected.amount_cents == pair.actual.amount_cents
+
+
+def get_payment_status(pair: PaymentPair) -> str:
+    """Classify a unique reference pair by exact amount equality."""
+    return "matched" if amounts_match(pair) else "amount_mismatch"
