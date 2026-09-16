@@ -4,6 +4,12 @@ from pathlib import Path
 
 import streamlit as st
 
+from reconciliation.engine import reconcile_payments
+from reconciliation.validation import (
+    CSVValidationError,
+    load_actual_payments,
+    load_expected_payments,
+)
 
 SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 
@@ -60,4 +66,21 @@ with actual_column:
     )
 
 st.caption("Maximum 5 MiB and 10,000 payment rows per file. Samples contain fictional data.")
-st.info("File selection is available. Validation and comparison are not available on this screen yet.")
+files_ready = expected_file is not None and actual_file is not None
+compare_clicked = st.button("Compare", disabled=not files_ready, type="primary", key="compare")
+
+if not files_ready:
+    st.info("Select both CSV files to compare payments.")
+
+if compare_clicked and files_ready:
+    # A failed attempt must not leave a previous successful result behind.
+    st.session_state.pop("reconciliation_results", None)
+    try:
+        expected_payments = load_expected_payments(expected_file.getvalue(), expected_file.name)
+        actual_payments = load_actual_payments(actual_file.getvalue(), actual_file.name)
+        results = reconcile_payments(expected_payments, actual_payments)
+    except CSVValidationError as error:
+        st.error(str(error))
+    else:
+        st.session_state["reconciliation_results"] = results
+        st.success(f"Comparison complete. {len(results)} payment references processed.")

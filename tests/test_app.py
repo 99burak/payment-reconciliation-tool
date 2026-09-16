@@ -1,6 +1,7 @@
 """Smoke and interaction checks for the payment upload screen."""
 
 from pathlib import Path
+from collections import Counter
 import unittest
 
 from streamlit.testing.v1 import AppTest
@@ -36,6 +37,75 @@ class UploadScreenTests(unittest.TestCase):
         self.assertEqual(app.session_state["expected_csv"].getvalue(), expected_bytes)
         self.assertEqual(app.session_state["actual_csv"].name, "actual.csv")
         self.assertEqual(app.session_state["actual_csv"].getvalue(), actual_bytes)
+
+
+class CompareScreenTests(unittest.TestCase):
+    def setUp(self):
+        self.app = AppTest.from_file(str(PROJECT_DIR / "app.py"), default_timeout=10).run()
+        self.expected_bytes = (PROJECT_DIR / "samples" / "expected_payments.csv").read_bytes()
+        self.actual_bytes = (PROJECT_DIR / "samples" / "actual_payments.csv").read_bytes()
+
+    def select_both_files(self):
+        self.app.file_uploader[0].set_value(("expected.csv", self.expected_bytes, "text/csv"))
+        self.app.file_uploader[1].set_value(("actual.csv", self.actual_bytes, "text/csv")).run()
+
+    def test_compare_requires_both_files(self):
+        self.assertTrue(self.app.button(key="compare").disabled)
+        self.app.file_uploader[0].set_value(("expected.csv", self.expected_bytes, "text/csv")).run()
+        self.assertTrue(self.app.button(key="compare").disabled)
+        self.app.file_uploader[0].clear()
+        self.app.file_uploader[1].set_value(("actual.csv", self.actual_bytes, "text/csv")).run()
+        self.assertTrue(self.app.button(key="compare").disabled)
+        self.app.file_uploader[0].set_value(("expected.csv", self.expected_bytes, "text/csv")).run()
+        self.assertFalse(self.app.button(key="compare").disabled)
+        self.assertNotIn("reconciliation_results", self.app.session_state)
+
+    def test_compare_stores_complete_results_and_shows_success(self):
+        self.select_both_files()
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertFalse(self.app.error)
+        self.assertIn("8 payment references", self.app.success[0].value)
+        results = self.app.session_state["reconciliation_results"]
+        self.assertEqual(Counter(r.status for r in results), {
+            "matched": 2, "amount_mismatch": 2, "missing": 1,
+            "unexpected": 1, "review_required": 2,
+        })
+        self.assertEqual(sum(len(r.expected_records) + len(r.actual_records) for r in results), 16)
+
+    def test_repeated_comparison_replaces_results_instead_of_appending(self):
+        self.select_both_files()
+        self.app.button(key="compare").click().run()
+        first_results = self.app.session_state["reconciliation_results"]
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(self.app.session_state["reconciliation_results"], first_results)
+        self.assertEqual(len(self.app.session_state["reconciliation_results"]), 8)
+
+    def test_invalid_file_on_either_side_reports_source_and_clears_previous_results(self):
+        for index, filename, invalid_data in [
+            (0, "invalid_expected.csv", b"payment_reference,customer_name,amount\nP,Company,nope\n"),
+            (1, "invalid_actual.csv", b"transaction_id,payment_reference,amount\nTX,P,nope\n"),
+        ]:
+            with self.subTest(filename=filename):
+                self.select_both_files()
+                self.app.button(key="compare").click().run()
+                self.assertIn("reconciliation_results", self.app.session_state)
+                self.app.file_uploader[index].set_value((filename, invalid_data, "text/csv")).run()
+                self.app.button(key="compare").click().run()
+                self.assertFalse(self.app.exception)
+                self.assertIn(f"{filename}, row 2:", self.app.error[0].value)
+                self.assertFalse(self.app.success)
+                self.assertNotIn("reconciliation_results", self.app.session_state)
+
+    def test_empty_uploaded_file_is_validated_and_reported(self):
+        self.select_both_files()
+        self.app.file_uploader[0].set_value(("empty.csv", b"", "text/csv")).run()
+        self.assertFalse(self.app.button(key="compare").disabled)
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertIn("empty.csv: File is empty.", self.app.error[0].value)
+        self.assertNotIn("reconciliation_results", self.app.session_state)
 
 
 if __name__ == "__main__":
