@@ -6,6 +6,7 @@ from pathlib import Path
 import streamlit as st
 
 from reconciliation.engine import reconcile_payments
+from reconciliation.reporting import results_to_csv
 from reconciliation.validation import (
     CSVValidationError,
     load_actual_payments,
@@ -157,3 +158,14 @@ if "reconciliation_results" in st.session_state:
         st.dataframe(rows, hide_index=True, width="stretch", key="results_table")
     else:
         st.info("No results match the selected filters.")
+
+    st.caption("The CSV report includes only the results shown by the current filters.")
+    st.download_button(
+        "Download CSV report",
+        data=results_to_csv(filtered_results),
+        file_name="reconciliation_report.csv",
+        mime="text/csv",
+        disabled=not filtered_results,
+        on_click="ignore",
+        key="download_report",
+    )

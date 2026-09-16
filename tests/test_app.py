@@ -2,8 +2,12 @@
 
 from pathlib import Path
 from collections import Counter
+import csv
+from io import StringIO
 import unittest
+from unittest.mock import patch
 
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 
@@ -267,6 +271,45 @@ class CompareScreenTests(unittest.TestCase):
         self.assertEqual(self.app.selectbox(key="status_filter").value, "all")
         self.assertFalse(self.app.checkbox(key="issues_only").value)
         self.assertEqual(len(self.app.dataframe[0].value), 8)
+
+    def test_report_download_contains_visible_results_and_preserves_filters(self):
+        self.select_both_files()
+        with patch("streamlit.download_button", wraps=st.download_button) as download:
+            self.app.button(key="compare").click().run()
+            report = next(call.kwargs for call in reversed(download.call_args_list)
+                          if call.kwargs.get("key") == "download_report")
+            rows = list(csv.DictReader(StringIO(report["data"].decode("utf-8-sig"))))
+            self.assertEqual(len(rows), 8)
+            self.app.selectbox(key="status_filter").select("amount_mismatch")
+            self.app.checkbox(key="issues_only").check()
+            self.app.text_input(key="reference_search").set_value("002").run()
+            report = next(call.kwargs for call in reversed(download.call_args_list)
+                          if call.kwargs.get("key") == "download_report")
+        rows = list(csv.DictReader(StringIO(report["data"].decode("utf-8-sig"))))
+        self.assertEqual([row["payment_reference"] for row in rows], ["PAY-002"])
+        self.assertEqual(rows[0]["difference"], "-200.00")
+        self.assertEqual(report["file_name"], "reconciliation_report.csv")
+        self.assertEqual(report["mime"], "text/csv")
+        button = self.app.download_button(key="download_report")
+        self.assertFalse(button.disabled)
+        self.assertTrue(button.proto.url)
+        button.click().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(self.app.text_input(key="reference_search").value, "002")
+        self.assertEqual(self.app.dataframe[0].value["Reference"].tolist(), ["PAY-002"])
+        self.assertEqual(len(self.app.session_state["reconciliation_results"]), 8)
+
+    def test_report_download_disabled_for_empty_filter_and_removed_on_input_change(self):
+        self.select_both_files()
+        self.assertEqual(len(self.app.download_button), 2)
+        self.app.button(key="compare").click().run()
+        self.app.text_input(key="reference_search").set_value("no-such-reference").run()
+        self.assertTrue(self.app.download_button(key="download_report").disabled)
+        self.app.text_input(key="reference_search").set_value("").run()
+        self.assertFalse(self.app.download_button(key="download_report").disabled)
+        self.app.file_uploader[0].clear().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(len(self.app.download_button), 2)
 
     def test_empty_uploaded_file_is_validated_and_reported(self):
         self.select_both_files()
