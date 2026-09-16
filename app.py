@@ -19,7 +19,16 @@ def clear_comparison_results() -> None:
     st.session_state.pop("reconciliation_results", None)
 
 
-st.set_page_config(page_title="Payment Reconciliation Tool", layout="centered")
+def format_amount(cents: int | None) -> str:
+    """Display TRY amounts without rounding or converting missing values to zero."""
+    if cents is None:
+        return ""
+    whole, fraction = divmod(abs(cents), 100)
+    sign = "-" if cents < 0 else ""
+    return f"{sign}{whole:,}.{fraction:02d}"
+
+
+st.set_page_config(page_title="Payment Reconciliation Tool", layout="wide")
 
 st.title("Payment Reconciliation Tool")
 st.write("Compare expected payments with actual payments and investigate differences.")
@@ -92,3 +101,19 @@ if compare_clicked and files_ready:
     else:
         st.session_state["reconciliation_results"] = results
         st.success(f"Comparison complete. {len(results)} payment references processed.")
+
+if "reconciliation_results" in st.session_state:
+    st.subheader("Reconciliation results")
+    st.caption("Amounts are in TRY. Blank cells mean the amount or difference cannot be determined.")
+    rows = [
+        {
+            "Reference": result.payment_reference,
+            "Expected (TRY)": format_amount(result.expected_amount_cents),
+            "Actual (TRY)": format_amount(result.actual_amount_cents),
+            "Difference (TRY)": format_amount(result.difference_cents),
+            "Status": result.status,
+            "Description": result.description,
+        }
+        for result in st.session_state["reconciliation_results"]
+    ]
+    st.dataframe(rows, hide_index=True, width="stretch", key="results_table")

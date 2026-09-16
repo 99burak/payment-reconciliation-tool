@@ -17,6 +17,7 @@ class UploadScreenTests(unittest.TestCase):
         self.assertEqual(len(app.file_uploader), 2)
         self.assertIsNone(app.session_state["expected_csv"])
         self.assertIsNone(app.session_state["actual_csv"])
+        self.assertEqual(len(app.dataframe), 0)
         self.assertEqual(len(app.download_button), 2)
         for download in app.download_button:
             self.assertTrue(download.proto.url)
@@ -111,6 +112,7 @@ class CompareScreenTests(unittest.TestCase):
                 self.app.file_uploader[index].set_value((filename, changed_bytes, "text/csv")).run()
                 self.assertFalse(self.app.exception)
                 self.assertNotIn("reconciliation_results", self.app.session_state)
+                self.assertEqual(len(self.app.dataframe), 0)
                 self.assertFalse(self.app.success)
                 self.assertFalse(self.app.button(key="compare").disabled)
 
@@ -133,6 +135,7 @@ class CompareScreenTests(unittest.TestCase):
                 self.assertFalse(self.app.success)
                 self.assertTrue(self.app.button(key="compare").disabled)
                 self.assertIsNotNone(self.app.file_uploader[1 - index].value)
+                self.assertEqual(len(self.app.dataframe), 0)
 
     def test_rerun_and_sample_download_do_not_discard_current_results(self):
         self.select_both_files()
@@ -140,10 +143,51 @@ class CompareScreenTests(unittest.TestCase):
         results = self.app.session_state["reconciliation_results"]
         self.app.run()
         self.assertEqual(self.app.session_state["reconciliation_results"], results)
+        self.assertEqual(len(self.app.dataframe[0].value), 8)
         for index in (0, 1):
             self.app.download_button[index].click().run()
             self.assertFalse(self.app.exception)
             self.assertEqual(self.app.session_state["reconciliation_results"], results)
+            self.assertEqual(len(self.app.dataframe[0].value), 8)
+
+    def test_results_table_displays_all_references_statuses_and_amounts(self):
+        self.select_both_files()
+        self.assertEqual(len(self.app.dataframe), 0)
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(len(self.app.dataframe), 1)
+        table = self.app.dataframe[0].value
+        self.assertEqual(list(table.columns), [
+            "Reference", "Expected (TRY)", "Actual (TRY)", "Difference (TRY)", "Status", "Description",
+        ])
+        self.assertEqual(
+            table.drop(columns="Description").values.tolist(),
+            [
+                ["PAY-001", "1,000.00", "1,000.00", "0.00", "matched"],
+                ["PAY-002", "2,500.00", "2,300.00", "-200.00", "amount_mismatch"],
+                ["PAY-003", "750.00", "", "", "missing"],
+                ["PAY-004", "", "", "", "review_required"],
+                ["PAY-005", "100.00", "125.00", "25.00", "amount_mismatch"],
+                ["PAY-006", "1,250.75", "1,250.75", "0.00", "matched"],
+                ["PAY-007", "", "", "", "review_required"],
+                ["PAY-099", "", "400.00", "", "unexpected"],
+            ],
+        )
+        self.assertEqual(table["Description"].tolist(),
+                         [r.description for r in self.app.session_state["reconciliation_results"]])
+
+    def test_table_keeps_large_amounts_and_negative_one_cent_exact(self):
+        expected = b"payment_reference,customer_name,amount\n001,Company,90071992547409.93\n"
+        actual = b"transaction_id,payment_reference,amount\nTX-1,001,90071992547409.92\n"
+        self.app.file_uploader[0].set_value(("expected.csv", expected, "text/csv"))
+        self.app.file_uploader[1].set_value(("actual.csv", actual, "text/csv")).run()
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        row = self.app.dataframe[0].value.iloc[0]
+        self.assertEqual(row["Reference"], "001")
+        self.assertEqual(row["Expected (TRY)"], "90,071,992,547,409.93")
+        self.assertEqual(row["Actual (TRY)"], "90,071,992,547,409.92")
+        self.assertEqual(row["Difference (TRY)"], "-0.01")
 
     def test_empty_uploaded_file_is_validated_and_reported(self):
         self.select_both_files()
