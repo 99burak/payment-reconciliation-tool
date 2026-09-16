@@ -98,6 +98,53 @@ class CompareScreenTests(unittest.TestCase):
                 self.assertFalse(self.app.success)
                 self.assertNotIn("reconciliation_results", self.app.session_state)
 
+    def test_replacing_either_file_clears_results_even_with_the_same_filename(self):
+        for index, filename, original_bytes in [
+            (0, "expected.csv", self.expected_bytes),
+            (1, "actual.csv", self.actual_bytes),
+        ]:
+            with self.subTest(index=index):
+                self.select_both_files()
+                self.app.button(key="compare").click().run()
+                self.assertIn("reconciliation_results", self.app.session_state)
+                changed_bytes = original_bytes.replace(b"1000.00", b"900.00", 1)
+                self.app.file_uploader[index].set_value((filename, changed_bytes, "text/csv")).run()
+                self.assertFalse(self.app.exception)
+                self.assertNotIn("reconciliation_results", self.app.session_state)
+                self.assertFalse(self.app.success)
+                self.assertFalse(self.app.button(key="compare").disabled)
+
+                self.app.button(key="compare").click().run()
+                self.assertFalse(self.app.exception)
+                result = next(r for r in self.app.session_state["reconciliation_results"]
+                              if r.payment_reference == "PAY-001")
+                self.assertEqual(result.status, "amount_mismatch")
+                self.assertEqual(result.difference_cents, 10000 if index == 0 else -10000)
+
+    def test_removing_either_file_clears_results_and_disables_comparison(self):
+        for index in (0, 1):
+            with self.subTest(index=index):
+                self.select_both_files()
+                self.app.button(key="compare").click().run()
+                self.assertIn("reconciliation_results", self.app.session_state)
+                self.app.file_uploader[index].clear().run()
+                self.assertFalse(self.app.exception)
+                self.assertNotIn("reconciliation_results", self.app.session_state)
+                self.assertFalse(self.app.success)
+                self.assertTrue(self.app.button(key="compare").disabled)
+                self.assertIsNotNone(self.app.file_uploader[1 - index].value)
+
+    def test_rerun_and_sample_download_do_not_discard_current_results(self):
+        self.select_both_files()
+        self.app.button(key="compare").click().run()
+        results = self.app.session_state["reconciliation_results"]
+        self.app.run()
+        self.assertEqual(self.app.session_state["reconciliation_results"], results)
+        for index in (0, 1):
+            self.app.download_button[index].click().run()
+            self.assertFalse(self.app.exception)
+            self.assertEqual(self.app.session_state["reconciliation_results"], results)
+
     def test_empty_uploaded_file_is_validated_and_reported(self):
         self.select_both_files()
         self.app.file_uploader[0].set_value(("empty.csv", b"", "text/csv")).run()

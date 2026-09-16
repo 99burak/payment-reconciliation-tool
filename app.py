@@ -13,6 +13,12 @@ from reconciliation.validation import (
 
 SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 
+
+def clear_comparison_results() -> None:
+    """Discard results when an input changes or a new comparison starts."""
+    st.session_state.pop("reconciliation_results", None)
+
+
 st.set_page_config(page_title="Payment Reconciliation Tool", layout="centered")
 
 st.title("Payment Reconciliation Tool")
@@ -35,6 +41,7 @@ with expected_column:
         accept_multiple_files=False,
         max_upload_size=5,
         key="expected_csv",
+        on_change=clear_comparison_results,
     )
     st.download_button(
         "Download expected sample",
@@ -55,6 +62,7 @@ with actual_column:
         accept_multiple_files=False,
         max_upload_size=5,
         key="actual_csv",
+        on_change=clear_comparison_results,
     )
     st.download_button(
         "Download actual sample",
@@ -74,7 +82,7 @@ if not files_ready:
 
 if compare_clicked and files_ready:
     # A failed attempt must not leave a previous successful result behind.
-    st.session_state.pop("reconciliation_results", None)
+    clear_comparison_results()
     try:
         expected_payments = load_expected_payments(expected_file.getvalue(), expected_file.name)
         actual_payments = load_actual_payments(actual_file.getvalue(), actual_file.name)
