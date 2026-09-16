@@ -18,6 +18,8 @@ SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 def clear_comparison_results() -> None:
     """Discard results when an input changes or a new comparison starts."""
     st.session_state.pop("reconciliation_results", None)
+    for key in ("reference_search", "status_filter", "issues_only"):
+        st.session_state.pop(key, None)
 
 
 def format_amount(cents: int | None) -> str:
@@ -117,6 +119,28 @@ if "reconciliation_results" in st.session_state:
     for column, (status, label) in zip(st.columns(5), status_labels.items(), strict=True):
         column.metric(label, status_counts[status])
 
+    search_column, status_column, issues_column = st.columns(3)
+    reference_search = search_column.text_input(
+        "Search payment reference", key="reference_search",
+        help="Find references containing this text, ignoring letter case.",
+    ).strip().casefold()
+    selected_status = status_column.selectbox(
+        "Status", options=["all", *status_labels],
+        format_func=lambda status: "All statuses" if status == "all" else status_labels[status],
+        key="status_filter",
+    )
+    issues_only = issues_column.checkbox("Show issues only", key="issues_only")
+    filtered_results = [
+        result for result in st.session_state["reconciliation_results"]
+        if reference_search in result.payment_reference.casefold()
+        and (selected_status == "all" or result.status == selected_status)
+        and (not issues_only or result.status != "matched")
+    ]
+    st.caption(
+        f"Showing {len(filtered_results)} of "
+        f"{len(st.session_state['reconciliation_results'])} payment references. "
+        "Summary counts above include all results."
+    )
     st.caption("Amounts are in TRY. Blank cells mean the amount or difference cannot be determined.")
     rows = [
         {
@@ -127,6 +151,9 @@ if "reconciliation_results" in st.session_state:
             "Status": result.status,
             "Description": result.description,
         }
-        for result in st.session_state["reconciliation_results"]
+        for result in filtered_results
     ]
-    st.dataframe(rows, hide_index=True, width="stretch", key="results_table")
+    if rows:
+        st.dataframe(rows, hide_index=True, width="stretch", key="results_table")
+    else:
+        st.info("No results match the selected filters.")

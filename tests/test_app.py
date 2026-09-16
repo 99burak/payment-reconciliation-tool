@@ -223,6 +223,51 @@ class CompareScreenTests(unittest.TestCase):
         self.assertEqual(row["Actual (TRY)"], "90,071,992,547,409.92")
         self.assertEqual(row["Difference (TRY)"], "-0.01")
 
+    def test_filters_combine_without_changing_results_or_summary(self):
+        self.select_both_files()
+        self.app.button(key="compare").click().run()
+        original_results = self.app.session_state["reconciliation_results"]
+        original_metrics = [m.value for m in self.app.metric]
+        self.app.checkbox(key="issues_only").check().run()
+        self.assertEqual(len(self.app.dataframe[0].value), 6)
+        self.assertNotIn("matched", self.app.dataframe[0].value["Status"].tolist())
+        self.app.selectbox(key="status_filter").select("amount_mismatch").run()
+        self.assertEqual(self.app.dataframe[0].value["Reference"].tolist(), ["PAY-002", "PAY-005"])
+        self.app.text_input(key="reference_search").set_value("  pay-002  ").run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(self.app.dataframe[0].value["Reference"].tolist(), ["PAY-002"])
+        self.assertEqual(self.app.session_state["reconciliation_results"], original_results)
+        self.assertEqual([m.value for m in self.app.metric], original_metrics)
+
+    def test_empty_filter_result_and_clearing_filters(self):
+        self.select_both_files()
+        self.app.button(key="compare").click().run()
+        self.app.text_input(key="reference_search").set_value("no-such-reference").run()
+        self.assertEqual(len(self.app.dataframe), 0)
+        self.assertIn("No results match", self.app.info[0].value)
+        self.app.text_input(key="reference_search").set_value("")
+        self.app.selectbox(key="status_filter").select("matched")
+        self.app.checkbox(key="issues_only").check().run()
+        self.assertEqual(len(self.app.dataframe), 0)
+        self.app.checkbox(key="issues_only").uncheck().run()
+        self.assertEqual(len(self.app.dataframe[0].value), 2)
+        self.app.selectbox(key="status_filter").select("all").run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(len(self.app.dataframe[0].value), 8)
+
+    def test_new_comparison_resets_filters(self):
+        self.select_both_files()
+        self.app.button(key="compare").click().run()
+        self.app.text_input(key="reference_search").set_value("002")
+        self.app.selectbox(key="status_filter").select("amount_mismatch")
+        self.app.checkbox(key="issues_only").check().run()
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(self.app.text_input(key="reference_search").value, "")
+        self.assertEqual(self.app.selectbox(key="status_filter").value, "all")
+        self.assertFalse(self.app.checkbox(key="issues_only").value)
+        self.assertEqual(len(self.app.dataframe[0].value), 8)
+
     def test_empty_uploaded_file_is_validated_and_reported(self):
         self.select_both_files()
         self.app.file_uploader[0].set_value(("empty.csv", b"", "text/csv")).run()
