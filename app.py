@@ -1,5 +1,6 @@
 """Entry point for the local payment reconciliation interface."""
 
+from collections import Counter
 from pathlib import Path
 
 import streamlit as st
@@ -104,6 +105,18 @@ if compare_clicked and files_ready:
 
 if "reconciliation_results" in st.session_state:
     st.subheader("Reconciliation results")
+    status_counts = Counter(result.status for result in st.session_state["reconciliation_results"])
+    status_labels = {
+        "matched": "Matched",
+        "amount_mismatch": "Amount mismatch",
+        "missing": "Missing",
+        "unexpected": "Unexpected",
+        "review_required": "Review required",
+    }
+    st.caption("Counts represent payment reference groups, not individual source rows.")
+    for column, (status, label) in zip(st.columns(5), status_labels.items(), strict=True):
+        column.metric(label, status_counts[status])
+
     st.caption("Amounts are in TRY. Blank cells mean the amount or difference cannot be determined.")
     rows = [
         {

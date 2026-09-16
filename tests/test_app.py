@@ -18,6 +18,7 @@ class UploadScreenTests(unittest.TestCase):
         self.assertIsNone(app.session_state["expected_csv"])
         self.assertIsNone(app.session_state["actual_csv"])
         self.assertEqual(len(app.dataframe), 0)
+        self.assertEqual(len(app.metric), 0)
         self.assertEqual(len(app.download_button), 2)
         for download in app.download_button:
             self.assertTrue(download.proto.url)
@@ -113,6 +114,7 @@ class CompareScreenTests(unittest.TestCase):
                 self.assertFalse(self.app.exception)
                 self.assertNotIn("reconciliation_results", self.app.session_state)
                 self.assertEqual(len(self.app.dataframe), 0)
+                self.assertEqual(len(self.app.metric), 0)
                 self.assertFalse(self.app.success)
                 self.assertFalse(self.app.button(key="compare").disabled)
 
@@ -122,6 +124,10 @@ class CompareScreenTests(unittest.TestCase):
                               if r.payment_reference == "PAY-001")
                 self.assertEqual(result.status, "amount_mismatch")
                 self.assertEqual(result.difference_cents, 10000 if index == 0 else -10000)
+                self.assertEqual({m.label: m.value for m in self.app.metric}, {
+                    "Matched": "1", "Amount mismatch": "3", "Missing": "1",
+                    "Unexpected": "1", "Review required": "2",
+                })
 
     def test_removing_either_file_clears_results_and_disables_comparison(self):
         for index in (0, 1):
@@ -136,6 +142,7 @@ class CompareScreenTests(unittest.TestCase):
                 self.assertTrue(self.app.button(key="compare").disabled)
                 self.assertIsNotNone(self.app.file_uploader[1 - index].value)
                 self.assertEqual(len(self.app.dataframe), 0)
+                self.assertEqual(len(self.app.metric), 0)
 
     def test_rerun_and_sample_download_do_not_discard_current_results(self):
         self.select_both_files()
@@ -149,6 +156,33 @@ class CompareScreenTests(unittest.TestCase):
             self.assertFalse(self.app.exception)
             self.assertEqual(self.app.session_state["reconciliation_results"], results)
             self.assertEqual(len(self.app.dataframe[0].value), 8)
+
+    def test_summary_counts_all_five_statuses_and_survives_a_rerun(self):
+        self.select_both_files()
+        self.assertEqual(len(self.app.metric), 0)
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        expected_counts = {
+            "Matched": "2", "Amount mismatch": "2", "Missing": "1",
+            "Unexpected": "1", "Review required": "2",
+        }
+        self.assertEqual(len(self.app.metric), 5)
+        self.assertEqual({m.label: m.value for m in self.app.metric}, expected_counts)
+        self.assertEqual(sum(int(m.value) for m in self.app.metric), len(self.app.dataframe[0].value))
+        self.app.run()
+        self.assertEqual({m.label: m.value for m in self.app.metric}, expected_counts)
+
+    def test_summary_counts_duplicate_reference_once_and_shows_zero_for_absent_statuses(self):
+        expected = b"payment_reference,customer_name,amount\nP,Company,100\n"
+        actual = b"transaction_id,payment_reference,amount\nTX-1,P,100\nTX-2,P,100\nTX-3,P,100\n"
+        self.app.file_uploader[0].set_value(("expected.csv", expected, "text/csv"))
+        self.app.file_uploader[1].set_value(("actual.csv", actual, "text/csv")).run()
+        self.app.button(key="compare").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual({m.label: m.value for m in self.app.metric}, {
+            "Matched": "0", "Amount mismatch": "0", "Missing": "0",
+            "Unexpected": "0", "Review required": "1",
+        })
 
     def test_results_table_displays_all_references_statuses_and_amounts(self):
         self.select_both_files()
